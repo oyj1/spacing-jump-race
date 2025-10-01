@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>띄어쓰기 점프 레이스 — 아케이드 맵 (2인 턴제)</title>
+  <style>
+    :root{
+      --ink:#0f172a; --panel:#ffffff; --sub:#475569; --ok:#10b981; --bad:#ef4444; --accent:#2563eb;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,Noto Sans KR,sans-serif;color:var(--ink)}
+    .wrap{max-width:1100px;margin:0 auto;padding:16px}
+    .card{background:var(--panel);border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:16px}
+    h1{margin:0 0 6px}
+    .muted{color:var(--sub)}
+    button{cursor:pointer;border:0;border-radius:12px;padding:10px 14px;font-size:16px}
+    .btn{background:var(--accent);color:#fff}
+    .btn.ghost{background:#e5e7eb;color:#111}
+    .btn.alt{background:var(--ok);color:#093}
+
+    .hud{display:flex;gap:12px;align-items:center;justify-content:space-between;margin:8px 0 12px}
+    .timer{font-weight:800;font-size:20px}
+    .turn{padding:6px 12px;border-radius:999px;background:#eef2ff;color:#3730a3;font-weight:800}
+
+    /* THEMES */
+    .map-wrap{position:relative;height:460px;border-radius:18px;overflow:hidden;border:3px solid rgba(0,0,0,.06)}
+    .theme-forest{background:linear-gradient(#b9fbc0,#eaffd0 55%, #caffbf)}
+    .theme-jungle{background:linear-gradient(#a7f3d0,#bef264 55%, #86efac)}
+    .theme-space{background:linear-gradient(#1f2937,#334155 55%, #0f172a); color:#e5e7eb}
+    .theme-sports{background:linear-gradient(#93c5fd,#bae6fd 55%, #fef9c3)}
+    .theme-candy{background:linear-gradient(#fecdd3,#fde68a 55%, #fbcfe8)}
+
+    .platform{position:absolute;height:18px;border-radius:10px;box-shadow:0 4px 0 rgba(0,0,0,.25) inset}
+    .ladder{position:absolute;width:16px;border:2px solid #78350f;border-radius:8px}
+    .coin{position:absolute;width:18px;height:18px;border-radius:50%;animation:spin 1.2s linear infinite}
+    @keyframes spin{from{transform:rotateY(0)}to{transform:rotateY(1turn)}}
+
+    .goal{position:absolute;bottom:32px;right:20px;font-size:32px}
+    .start-flag{position:absolute;bottom:32px;left:20px;font-size:28px}
+
+    .piece{position:absolute;transform:translate(-50%,-50%);transition:left .45s ease, top .45s ease;filter:drop-shadow(0 4px 4px rgba(0,0,0,.3))}
+    .piece .sprite{font-size:44px}
+    .piece.jump{animation:jump .45s ease}
+    @keyframes jump{0%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-66%) scale(1.05)}100%{transform:translate(-50%,-50%) scale(1)}}
+    .piece.hit{animation:hit .4s ease}
+    @keyframes hit{0%,100%{transform:translate(-50%,-50%)}30%{transform:translate(calc(-50% + 8px),-48%)}60%{transform:translate(calc(-50% - 8px),-52%)}}
+
+    .bubble{position:absolute;left:50%;top:-54px;transform:translateX(-50%);padding:6px 10px;border-radius:999px;background:#111;color:#fff;font-size:12px;opacity:0;transition:opacity .25s, top .25s}
+    .piece.good .bubble{background:var(--ok)}
+    .piece.bad .bubble{background:var(--bad)}
+
+    .qbox{margin-top:10px;background:#f8fafc;border:2px dashed #cbd5e1;border-radius:14px;padding:14px}
+    .q{font-size:26px;font-weight:800;text-align:center}
+    .choices{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}
+    .choice{border:2px solid #e5e7eb;border-radius:14px;padding:12px;background:#fff;font-size:20px}
+    .choice.correct{border-color:var(--ok)}
+    .choice.wrong{border-color:var(--bad)}
+    .disabled{pointer-events:none;opacity:.6}
+
+    .item-badge{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:4px 8px;border-radius:999px;font-size:12px;opacity:0;transition:opacity .3s, top .3s}
+
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:16px}
+    .modal.show{display:flex}
+    .modal .panel{background:#fff;padding:20px;border-radius:16px;max-width:560px;width:100%;text-align:center}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>띄어쓰기 점프 레이스 — 아케이드 맵 🏁</h1>
+      <p class="muted">테마 랜덤 · 아이템 · 보스전 · 2인 턴제 · 클릭만으로 플레이</p>
+
+      <!-- SETUP -->
+      <section id="setup">
+        <h2>캐릭터 선택</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <h3>플레이어 1</h3>
+            <div id="chars1" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
+          </div>
+          <div>
+            <h3>플레이어 2</h3>
+            <div id="chars2" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
+          </div>
+        </div>
+        <div style="margin:8px 0">
+          <label><input type="checkbox" id="allowDup" checked> 캐릭터 중복 허용</label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
+          <div class="card" style="padding:12px">
+            <div class="muted" style="font-size:12px">게임 시간(분)</div>
+            <div style="display:flex;gap:8px;margin-top:6px">
+              <button class="btn ghost" data-time="5">5</button>
+              <button class="btn ghost" data-time="10">10</button>
+              <button class="btn ghost" data-time="15">15</button>
+            </div>
+            <div style="margin-top:6px">선택: <b id="timeLabel">10</b>분</div>
+          </div>
+          <div class="card" style="padding:12px">
+            <div class="muted" style="font-size:12px">코스 길이(칸)</div>
+            <div style="display:flex;gap:8px;margin-top:6px">
+              <button class="btn ghost" data-steps="12">짧게</button>
+              <button class="btn ghost" data-steps="16">보통</button>
+              <button class="btn ghost" data-steps="20">길게</button>
+            </div>
+            <div style="margin-top:6px">선택: <b id="stepsLabel">16</b>칸</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn" id="startBtn">게임 시작</button>
+          <button class="btn alt" id="demoBtn">빠른 시작(랜덤)</button>
+        </div>
+      </section>
+
+      <!-- GAME -->
+      <section id="game" style="display:none">
+        <div class="hud">
+          <div class="timer" id="timer">10:00</div>
+          <div id="turnBadge" class="turn">P1 차례</div>
+        </div>
+        <div class="map-wrap theme-forest" id="map">
+          <div class="start-flag">🚩</div>
+          <div class="goal">🏆</div>
+          <div id="platforms"></div>
+          <div id="ladders"></div>
+          <div id="coins"></div>
+          <div id="bossZone" title="보스 구간" style="position:absolute;left:50%;top:45%;width:80px;height:80px;border:3px dashed #ef4444;border-radius:12px;display:none;align-items:center;justify-content:center;color:#ef4444;font-weight:800;">BOSS</div>
+          <div id="p1" class="piece" style="left:40px;top:400px"><div class="bubble">출발!</div><div class="sprite" id="p1e">🐰</div><div class="item-badge" id="p1item"></div></div>
+          <div id="p2" class="piece" style="left:40px;top:400px"><div class="bubble">출발!</div><div class="sprite" id="p2e">🐢</div><div class="item-badge" id="p2item"></div></div>
+        </div>
+
+        <div class="qbox">
+          <div class="q" id="question">문장이 여기에 표시됩니다</div>
+          <div class="choices" id="choices"></div>
+        </div>
+      </section>
+
+      <!-- RESULT -->
+      <div id="resultModal" class="modal">
+        <div class="panel">
+          <h2 id="resultTitle">게임 종료</h2>
+          <p id="resultDesc" class="muted">점수 안내</p>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button id="restartBtn" class="btn">다시 시작</button>
+            <button id="setupBtn" class="btn ghost">설정으로</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- audio -->
+  <audio id="sfx-correct" src="./assets/sfx/correct.wav" preload="auto"></audio>
+  <audio id="sfx-wrong" src="./assets/sfx/wrong.wav" preload="auto"></audio>
+  <audio id="sfx-item" src="./assets/sfx/item.wav" preload="auto"></audio>
+  <audio id="sfx-boss" src="./assets/sfx/boss.wav" preload="auto"></audio>
+  <audio id="sfx-click" src="./assets/sfx/click.wav" preload="auto"></audio>
+  <audio id="bgm" src="./assets/sfx/bgm.wav" preload="auto" loop></audio>
+
+  <script>
+    // ----- characters -----
+    const CHARS = [
+      { key:'rabbit', name:'토끼', emoji:'🐰'},
+      { key:'turtle', name:'거북이', emoji:'🐢'},
+      { key:'capy', name:'카피바라', emoji:'🦫'},
+      { key:'ham', name:'햄스터', emoji:'🐹'},
+    ];
+
+    // ----- themes -----
+    const THEMES = {
+      forest: { cls:'theme-forest', platform:'#8bd3a8', ladder:'#b45309', coin:'#fde68a', coinBorder:'#92400e' },
+      jungle: { cls:'theme-jungle', platform:'#65a30d', ladder:'#166534', coin:'#f59e0b', coinBorder:'#7c2d12' },
+      space:  { cls:'theme-space',  platform:'#64748b', ladder:'#94a3b8', coin:'#e5e7eb', coinBorder:'#94a3b8' },
+      sports: { cls:'theme-sports', platform:'#94a3b8', ladder:'#1d4ed8', coin:'#fbbf24', coinBorder:'#92400e' },
+      candy:  { cls:'theme-candy',  platform:'#fca5a5', ladder:'#fb7185', coin:'#fde68a', coinBorder:'#fb7185' },
+    };
+    const THEME_KEYS = Object.keys(THEMES);
+
+    // ----- state -----
+    const S = {
+      allowDup:true, minutes:10, steps:16, cur:1, timeLeft:600, playing:false,
+      p1:{char:null, idx:0, streak:0, item:null}, p2:{char:null, idx:0, streak:0, item:null},
+      theme:'forest', regularDeck:[], bossDeck:[], bossAt:12 // boss triggers when passing this node index
+    };
+
+    // ----- elements -----
+    const el = {
+      setup:document.getElementById('setup'), game:document.getElementById('game'),
+      chars1:document.getElementById('chars1'), chars2:document.getElementById('chars2'),
+      allowDup:document.getElementById('allowDup'),
+      timeLabel:document.getElementById('timeLabel'), stepsLabel:document.getElementById('stepsLabel'),
+      startBtn:document.getElementById('startBtn'), demoBtn:document.getElementById('demoBtn'),
+      timer:document.getElementById('timer'), turn:document.getElementById('turnBadge'),
+      map:document.getElementById('map'), plats:document.getElementById('platforms'), ladders:document.getElementById('ladders'), coins:document.getElementById('coins'),
+      p1:document.getElementById('p1'), p2:document.getElementById('p2'),
+      p1e:document.getElementById('p1e'), p2e:document.getElementById('p2e'),
+      p1item:document.getElementById('p1item'), p2item:document.getElementById('p2item'),
+      q:document.getElementById('question'), choices:document.getElementById('choices'),
+      resultModal:document.getElementById('resultModal'), resultTitle:document.getElementById('resultTitle'), resultDesc:document.getElementById('resultDesc'),
+      restartBtn:document.getElementById('restartBtn'), setupBtn:document.getElementById('setupBtn'),
+      bossZone:document.getElementById('bossZone'),
+      sfx:{correct:document.getElementById('sfx-correct'), wrong:document.getElementById('sfx-wrong'), item:document.getElementById('sfx-item'), boss:document.getElementById('sfx-boss'), click:document.getElementById('sfx-click'), bgm:document.getElementById('bgm')}
+    };
+
+    // ----- simple map path (same as before but compact) -----
+    const MAP = {
+      platforms:[
+        {left:20, width:320, top:400},
+        {left:360, width:280, top:400},
+        {left:660, width:360, top:400},
+        {left:80, width:260, top:310},
+        {left:360, width:220, top:310},
+        {left:640, width:260, top:310},
+        {left:40, width:260, top:220},
+        {left:330, width:290, top:220},
+        {left:660, width:360, top:220},
+        {left:120, width:260, top:130},
+        {left:420, width:240, top:130},
+        {left:720, width:260, top:130},
+      ],
+      ladders:[
+        {left:320, top:230, height:160},
+        {left:660, top:320, height:160},
+        {left:250, top:140, height:160},
+        {left:600, top:140, height:160},
+      ],
+      path:[
+        {x:40,y:410},{x:120,y:410},{x:200,y:410},{x:280,y:410},{x:360,y:410},
+        {x:420,y:410},{x:500,y:410},{x:580,y:410},{x:660,y:410},{x:740,y:410},{x:820,y:410},{x:900,y:410},
+        {x:320,y:330},{x:320,y:240},
+        {x:420,y:330},{x:540,y:330},{x:660,y:330},{x:740,y:330},{x:840,y:330},
+        {x:660,y:330},{x:660,y:240},
+        {x:720,y:240},{x:800,y:240},{x:880,y:240},{x:960,y:240},
+        {x:980,y:160}
+      ]
+    };
+
+    // ----- utils -----
+    function shuffle(arr){ return arr.sort(()=>Math.random()-0.5); }
+
+    // ----- build character buttons -----
+    function buildChars(container, p){
+      container.innerHTML='';
+      CHARS.forEach(c=>{
+        const b=document.createElement('button');
+        b.className='choice'; b.style.fontSize='28px'; b.innerHTML=`${c.emoji}<div style="font-size:14px">${c.name}</div>`;
+        b.onclick=()=>{ 
+          if(!S.allowDup && ((S.p1.char&&S.p1.char.key===c.key)||(S.p2.char&&S.p2.char.key===c.key))){ alert('중복 선택 불가'); return;}
+          S['p'+p].char=c; [...container.children].forEach(a=>a.style.outline=''); b.style.outline='3px solid #2563eb';
+          el.sfx.click.currentTime=0; el.sfx.click.play().catch(()=>{});
+        };
+        container.appendChild(b);
+      });
+    }
+
+    // ----- render map with theme -----
+    function renderMap(){
+      const theme = THEMES[S.theme];
+      el.map.className = 'map-wrap ' + theme.cls;
+      el.plats.innerHTML=''; el.ladders.innerHTML=''; el.coins.innerHTML='';
+      MAP.platforms.forEach(p=>{
+        const d=document.createElement('div'); d.className='platform';
+        d.style.left=p.left+'px'; d.style.width=p.width+'px'; d.style.top=p.top+'px';
+        d.style.background=theme.platform; el.plats.appendChild(d);
+      });
+      MAP.ladders.forEach(l=>{
+        const d=document.createElement('div'); d.className='ladder';
+        d.style.left=l.left+'px'; d.style.top=l.top+'px'; d.style.height=l.height+'px';
+        d.style.background=theme.ladder; el.ladders.appendChild(d);
+      });
+      for(let i=3;i<MAP.path.length;i+=3){
+        const n=MAP.path[i]; const c=document.createElement('div'); c.className='coin';
+        c.style.left=n.x+'px'; c.style.top=(n.y-18)+'px';
+        c.style.background=theme.coin; c.style.border='2px solid '+theme.coinBorder;
+        el.coins.appendChild(c);
+      }
+    }
+
+    // ----- timer -----
+    let tId=null; 
+    function startTimer(){ clearInterval(tId); tId=setInterval(()=>{
+      if(!S.playing) return; S.timeLeft--; if(S.timeLeft<0) S.timeLeft=0;
+      const m=String(Math.floor(S.timeLeft/60)).padStart(2,'0'); const s=String(S.timeLeft%60).padStart(2,'0'); el.timer.textContent=`${m}:${s}`;
+      if(S.timeLeft===0) finish('시간 종료!');
+    },1000)}
+
+    // ----- game start -----
+    document.querySelectorAll('[data-time]').forEach(b=>b.onclick=()=>{S.minutes=+b.dataset.time; S.timeLeft=S.minutes*60; el.timeLabel.textContent=S.minutes});
+    document.querySelectorAll('[data-steps]').forEach(b=>b.onclick=()=>{S.steps=+b.dataset.steps; el.stepsLabel.textContent=S.steps});
+    el.allowDup.onchange=e=>S.allowDup=e.target.checked;
+    el.startBtn.onclick=startGame; el.demoBtn.onclick=()=>{ S.p1.char=CHARS[Math.random()*4|0]; S.p2.char=CHARS[Math.random()*4|0]; startGame(); };
+
+    function startGame(){
+      if(!S.p1.char||!S.p2.char){ alert('플레이어 1, 2 캐릭터를 선택하세요.'); return; }
+      S.theme = THEME_KEYS[Math.random()*THEME_KEYS.length|0];
+      renderMap();
+      S.p1.idx=0; S.p2.idx=0; S.p1.streak=0; S.p2.streak=0; S.p1.item=null; S.p2.item=null;
+      S.cur=1; S.timeLeft=(S.minutes||10)*60; S.playing=true;
+      el.p1e.textContent=S.p1.char.emoji; el.p2e.textContent=S.p2.char.emoji;
+      placePieces();
+      el.turn.textContent='P1 차례';
+      el.setup.style.display='none'; el.game.style.display='block';
+      // load deck & bgm
+      fetch('./questions.json').then(r=>r.json()).then(data=>{
+        S.regularDeck=shuffle(data.regular.slice());
+        S.bossDeck=shuffle(data.boss.slice());
+        nextQuestion();
+      });
+      startTimer();
+      el.sfx.bgm.volume=0.25; el.sfx.bgm.currentTime=0; el.sfx.bgm.play().catch(()=>{});
+      // boss zone shown at index
+      el.bossZone.style.display='flex';
+    }
+
+    function placePieces(){
+      const n1=MAP.path[S.p1.idx]; const n2=MAP.path[S.p2.idx];
+      if(n1){ el.p1.style.left=n1.x+'px'; el.p1.style.top=n1.y+'px'; }
+      if(n2){ el.p2.style.left=n2.x+'px'; el.p2.style.top=n2.y+'px'; }
+    }
+
+    // ----- questions (no repeat within deck) -----
+    let currentQ=null;
+    function drawRegular(){ if(S.regularDeck.length===0) return null; return S.regularDeck.pop(); }
+    function drawBoss(){ if(S.bossDeck.length===0) return null; return S.bossDeck.pop(); }
+
+    function nextQuestion(){
+      // boss check: if current player's index >= bossAt-1 and < bossAt+1
+      const actorKey = S.cur===1 ? 'p1':'p2';
+      const actorIdx = S[actorKey].idx;
+      const isBoss = actorIdx >= S.bossAt-1 && actorIdx < S.bossAt+1;
+      const card = isBoss ? drawBoss() : drawRegular();
+      if(!card){ // fallback to regular if boss empty
+        currentQ = drawRegular();
+      } else currentQ = card;
+
+      if(!currentQ){ // all used -> reshuffle or finish early
+        finish('축하합니다! 준비된 문제를 모두 풀었어요!');
+        return;
+      }
+      const order = Math.random()<.5 ? [currentQ.correct, currentQ.wrong] : [currentQ.wrong, currentQ.correct];
+      el.q.textContent = currentQ.q;
+      el.choices.innerHTML='';
+      order.forEach(text=>{
+        const b=document.createElement('button'); b.className='choice'; b.innerHTML=text;
+        b.onclick=()=>handleAnswer(text===currentQ.correct, b, isBoss);
+        el.choices.appendChild(b);
+      });
+      el.sfx.click.currentTime=0; el.sfx.click.play().catch(()=>{});
+      if(isBoss){ el.sfx.boss.currentTime=0; el.sfx.boss.play().catch(()=>{}); }
+    }
+
+    // ----- items -----
+    const ITEMS = ['BOOST','BACK','PUSH','SHIELD'];
+    function giveRandomItem(player){
+      const key = player===1?'p1':'p2';
+      if(S[key].item) return; // one slot
+      const it = ITEMS[Math.random()*ITEMS.length|0];
+      S[key].item = it;
+      const badge = key==='p1'? el.p1item : el.p2item;
+      badge.textContent = it; badge.style.opacity='1'; badge.style.top='-4px';
+      setTimeout(()=>{ badge.style.opacity='0'; badge.style.top='-10px'; }, 900);
+      el.sfx.item.currentTime=0; el.sfx.item.play().catch(()=>{});
+    }
+    function useItem(player){
+      const key = player===1?'p1':'p2'; const opp = player===1?'p2':'p1';
+      const it = S[key].item; if(!it) return false;
+      if(it==='BOOST'){ move(player, 2); }
+      if(it==='BACK'){ move(player, -1); }
+      if(it==='PUSH'){ move(opp, -1); }
+      if(it==='SHIELD'){ /* passive: next wrong ignores penalty */ }
+      S[key].item = null;
+      return true;
+    }
+
+    // ----- handle answer -----
+    function handleAnswer(ok, btn, isBoss=false){
+      [...el.choices.children].forEach(c=>c.classList.add('disabled'));
+      btn.classList.add(ok? 'correct':'wrong');
+      const actor = S.cur===1? el.p1:el.p2;
+      const actorKey = S.cur===1? 'p1':'p2';
+      actor.classList.remove('good','bad'); void actor.offsetWidth;
+
+      if(ok){
+        actor.classList.add('good','jump'); say(actor,'정답!');
+        el.sfx.correct.currentTime=0; el.sfx.correct.play().catch(()=>{});
+        S[actorKey].streak += 1;
+        // streak boost
+        let step = 1;
+        if(S[actorKey].streak>=5){ step = 2; say(actor,'부스트! 🚀'); }
+        move(S.cur, step);
+        // chance to get item
+        if(Math.random()<0.35){ giveRandomItem(S.cur); }
+      } else {
+        el.sfx.wrong.currentTime=0; el.sfx.wrong.play().catch(()=>{});
+        const hasShield = S[actorKey].item==='SHIELD';
+        if(hasShield){
+          say(actor,'쉴드! ✅'); S[actorKey].item=null;
+        } else {
+          S[actorKey].streak = 0;
+          actor.classList.add('bad','hit'); say(actor,'앗!');
+          // minor penalty: no move; small knockback in boss
+          if(isBoss){ move(S.cur, -1); }
+        }
+      }
+
+      setTimeout(()=>{
+        const w=winner(); if(w){ finish(`${w===1?'플레이어 1':'플레이어 2'} 승리!`); return; }
+        S.cur = S.cur===1?2:1; el.turn.textContent=`P${S.cur} 차례`; nextQuestion();
+        actor.classList.remove('jump','hit');
+      }, 700);
+    }
+
+    function say(actor, text){ const b=actor.querySelector('.bubble'); b.textContent=text; b.style.opacity='1'; b.style.top='-64px'; setTimeout(()=>{ b.style.opacity='0'; b.style.top='-54px'; },600); }
+
+    function move(player, steps){
+      const key = player===1? 'p1':'p2';
+      const goalIdx = Math.max(0, Math.min(MAP.path.length-1, S[key].idx + steps));
+      S[key].idx = goalIdx; placePieces();
+    }
+
+    function winner(){ if(S.p1.idx>=MAP.path.length-1) return 1; if(S.p2.idx>=MAP.path.length-1) return 2; return 0; }
+
+    function finish(title){
+      S.playing=false; clearInterval(tId);
+      el.sfx.bgm.pause();
+      let desc='';
+      if(title.includes('시간')){
+        if(S.p1.idx>S.p2.idx) desc='플레이어 1이 더 멀리 갔어요!';
+        else if(S.p2.idx>S.p1.idx) desc='플레이어 2가 더 멀리 갔어요!';
+        else desc='무승부!';
+      } else {
+        desc=`P1 ${S.p1.idx}칸 · P2 ${S.p2.idx}칸`;
+      }
+      el.resultTitle.textContent=title; el.resultDesc.textContent=desc; el.resultModal.classList.add('show');
+    }
+
+    // ----- events -----
+    el.restartBtn.onclick=()=>{ 
+      el.resultModal.classList.remove('show'); 
+      S.p1.idx=0; S.p2.idx=0; S.cur=1; S.playing=true; S.timeLeft=(S.minutes||10)*60; 
+      S.p1.streak=0; S.p2.streak=0; S.p1.item=null; S.p2.item=null;
+      placePieces(); el.turn.textContent='P1 차례'; nextQuestion(); startTimer(); el.sfx.bgm.currentTime=0; el.sfx.bgm.play().catch(()=>{});
+    };
+    el.setupBtn.onclick=()=>{ 
+      el.resultModal.classList.remove('show'); el.game.style.display='none'; el.setup.style.display='block'; el.sfx.bgm.pause();
+    };
+
+    // init
+    function init(){
+      buildChars(el.chars1,1); buildChars(el.chars2,2);
+      el.timeLabel.textContent='10'; el.stepsLabel.textContent='16';
+    }
+    init();
+  </script>
+</body>
+</html>
