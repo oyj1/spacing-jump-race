@@ -1,0 +1,115 @@
+{
+  "theme": "forest",
+  "bgm": "assets/sfx/bgm_forest.wav",
+  "start": "n0",
+  "goal": "n10",
+  "nodes": {
+    "n0": {
+      "x": 40,
+      "y": 120,
+      "type": "START"
+    },
+    "n1": {
+      "x": 140,
+      "y": 120,
+      "type": "NORMAL"
+    },
+    "n2": {
+      "x": 240,
+      "y": 160,
+      "type": "NORMAL"
+    },
+    "n3": {
+      "x": 340,
+      "y": 200,
+      "type": "NORMAL"
+    },
+    "n4": {
+      "x": 440,
+      "y": 200,
+      "type": "NORMAL"
+    },
+    "n5": {
+      "x": 540,
+      "y": 240,
+      "type": "BOSS"
+    },
+    "n6": {
+      "x": 640,
+      "y": 240,
+      "type": "NORMAL"
+    },
+    "n7": {
+      "x": 740,
+      "y": 280,
+      "type": "NORMAL"
+    },
+    "n8": {
+      "x": 840,
+      "y": 320,
+      "type": "NORMAL"
+    },
+    "n9": {
+      "x": 940,
+      "y": 320,
+      "type": "NORMAL"
+    },
+    "n10": {
+      "x": 1040,
+      "y": 360,
+      "type": "GOAL"
+    }
+  },
+  "edges": [
+    {
+      "from": "n0",
+      "to": "n1",
+      "kind": "RUN"
+    },
+    {
+      "from": "n1",
+      "to": "n2",
+      "kind": "LADDER"
+    },
+    {
+      "from": "n2",
+      "to": "n3",
+      "kind": "RUN"
+    },
+    {
+      "from": "n3",
+      "to": "n4",
+      "kind": "RUN"
+    },
+    {
+      "from": "n4",
+      "to": "n5",
+      "kind": "RUN"
+    },
+    {
+      "from": "n5",
+      "to": "n6",
+      "kind": "RUN"
+    },
+    {
+      "from": "n6",
+      "to": "n7",
+      "kind": "JUMP"
+    },
+    {
+      "from": "n7",
+      "to": "n8",
+      "kind": "RUN"
+    },
+    {
+      "from": "n8",
+      "to": "n9",
+      "kind": "RUN"
+    },
+    {
+      "from": "n9",
+      "to": "n10",
+      "kind": "LADDER"
+    }
+  ]
+}

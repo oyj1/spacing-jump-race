@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>띄어쓰기 레이스 V4 — Platform & 3D Dice</title>
+<style>
+:root{ --bg:#f5f9ff; --panel:#ffffff; --text:#0b1020; --sub:#475569; --accent:#2563eb; --boss:#ef4444; }
+*{box-sizing:border-box} html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,Pretendard,Segoe UI,Arial,sans-serif}
+.app{display:grid;grid-template-rows:auto 1fr auto;min-height:100%}
+header,footer{padding:10px 14px;background:var(--panel);border-bottom:1px solid #e5e7eb} footer{border-top:1px solid #e5e7eb;border-bottom:none;color:var(--sub)}
+.brand{font-weight:800}.badge{padding:6px 10px;border-radius:999px;background:#eef2ff;color:#334155;font-size:12px}
+.btn{cursor:pointer;border:none;border-radius:12px;padding:10px 14px;font-weight:700;background:#e5ecff;color:#0b1020}.btn.primary{background:var(--accent);color:#fff}.btn.ghost{background:#fff;border:1px solid #e5e7eb}
+.map-wrap{height:56vh;min-height:360px;overflow:hidden;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;position:relative}
+.map-inner{height:100%;width:1200px;position:relative;transition:transform .45s cubic-bezier(.22,.61,.36,1)}
+body.forest .map-wrap{background:linear-gradient(180deg,#e7f8ec,#f6fff7)} body.space .map-wrap{background:linear-gradient(180deg,#eef1ff,#f7f7ff)} body.sports .map-wrap{background:linear-gradient(180deg,#fff6e6,#fffaf0)} body.candy .map-wrap{background:linear-gradient(180deg,#fff0f7,#fff7fb)}
+.platform{position:absolute;height:12px;background:#ced9ff;border-radius:6px;box-shadow:0 6px 14px rgba(0,0,0,.08)} .ladder{position:absolute;width:10px;background:#deb887;border:2px solid #b8860b;border-radius:6px}
+.node{position:absolute;transform:translate(-50%,0);bottom:0} .pin{position:absolute;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:999px;background:#fff;border:2px solid #cbd5e1}
+.pin.boss{border-color:var(--boss);box-shadow:0 0 10px rgba(239,68,68,.4)} .pin.goal{border-color:#22c55e;box-shadow:0 0 10px rgba(34,197,94,.4)}
+.player{position:absolute;transform:translate(-50%,-50%);width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#fff;border:2px solid #e5e7eb;box-shadow:0 8px 20px rgba(0,0,0,.12);z-index:5;image-rendering:pixelated;overflow:hidden}
+.player img{width:100%;height:100%;display:block;image-rendering:pixelated}
+.quiz{padding:14px;display:grid;gap:10px;background:var(--panel)} .answers{display:grid;gap:8px} .answers button{font-size:18px;padding:12px;border-radius:14px;background:#f3f4f6;border:1px solid #e5e7eb;text-align:left;color:#111827}
+.judge{position:fixed;left:50%;top:18%;transform:translateX(-50%);padding:10px 14px;border-radius:14px;font-weight:800;display:none}
+.judge.ok{background:#dcfce7;color:#065f46;border:2px solid #86efac} .judge.ng{background:#fee2e2;color:#7f1d1d;border:2px solid #fecaca}
+#diceOverlay{position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;align-items:center;justify-content:center;z-index:20}
+.diceStage{width:min(26vw,220px);height:min(26vw,220px);perspective:900px;position:relative}
+.diceCube{position:absolute;inset:0;margin:auto;transform-style:preserve-3d;transition:transform .35s ease-out}
+.face{position:absolute;inset:0;margin:auto;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:56px;background:#fff;border-radius:16px;box-shadow:inset 0 6px 10px rgba(0,0,0,.08)}
+.face.front{transform:translateZ(80px)} .face.back{transform:rotateY(180deg) translateZ(80px)} .face.right{transform:rotateY(90deg) translateZ(80px)} .face.left{transform:rotateY(-90deg) translateZ(80px)} .face.top{transform:rotateX(90deg) translateZ(80px)} .face.bottom{transform:rotateX(-90deg) translateZ(80px)}
+.diceCaption{position:absolute;top:calc(100% + 12px);width:100%;text-align:center;font-weight:800;color:#111827} .groundShadow{position:absolute;left:50%;top:50%;transform:translate(-50%,120%);width:70%;height:16px;background:rgba(0,0,0,.25);filter:blur(8px);border-radius:999px}
+</style>
+</head>
+<body class="forest">
+<div class="app">
+  <header>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div class="brand">🏁 띄어쓰기 레이스</div>
+      <span class="badge">턴: <span id="turnLabel">P1</span></span>
+      <span class="badge">⏱ <span id="timeLeft">10:00</span></span>
+      <span class="badge" id="themeBadge">theme: —</span>
+      <span class="badge" style="background:#dcfce7;color:#065f46">BUILD v4</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="startBtn" class="btn primary">게임 시작</button>
+      <button id="fsBtn" class="btn ghost">전체화면</button>
+    </div>
+  </header>
+  <div class="map-wrap">
+    <div class="map-inner" id="mapInner">
+      <div id="platforms"></div><div id="ladders"></div><div id="nodes"></div>
+      <div class="player" id="p1"><img src="assets/avatars/p1.png" alt="P1"/></div>
+      <div class="player" id="p2"><img src="assets/avatars/p2.png" alt="P2"/></div>
+    </div>
+  </div>
+  <section class="quiz" aria-live="polite">
+    <div class="q-stem" id="qStem">게임 시작을 누르면 맵을 랜덤으로 불러와요.</div>
+    <div class="answers"><button id="a1" disabled>—</button><button id="a2" disabled>—</button></div>
+  </section>
+  <footer><small>정답: 1~6 전진 / 오답: 0~2 후퇴. 착지 시 보스/골인 판정. (아이템 제거)</small></footer>
+</div>
+<div class="judge" id="judge"></div>
+<div id="diceOverlay" aria-live="polite">
+  <div class="diceStage">
+    <div class="diceCube" id="diceCube">
+      <div class="face front">1</div><div class="face back">6</div>
+      <div class="face right">3</div><div class="face left">4</div>
+      <div class="face top">5</div><div class="face bottom">2</div>
+    </div>
+    <div class="groundShadow"></div><div class="diceCaption" id="diceCaption"> </div>
+  </div>
+</div>
+<script>
+const $ = (s)=>document.querySelector(s); const THEMES=['forest','space','sports','candy'];
+const AudioBank={ sfx:{correct:new Audio('assets/sfx/correct.wav'),wrong:new Audio('assets/sfx/wrong.wav'),boss:new Audio('assets/sfx/boss.wav'),click:new Audio('assets/sfx/click.wav'),dice_roll:new Audio('assets/sfx/dice_roll.wav'),dice_hit:new Audio('assets/sfx/dice_hit.wav')}, bgm:null,
+play(n){const a=this.sfx[n]; if(a){a.currentTime=0;a.play().catch(()=>{});} }, setBgm(t){ if(this.bgm){this.bgm.pause();} this.bgm=new Audio('assets/sfx/bgm_'+t+'.wav'); this.bgm.loop=true; this.bgm.volume=0.25; }, startBgm(){this.bgm?.play().catch(()=>{});}, unlock(){try{Object.values(this.sfx).forEach(a=>a.play().then(()=>a.pause()).catch(()=>{}));}catch(e){} } };
+const S={timeLeft:600,playing:false,cur:1,map:null,nodes:{},edges:[],p1:{node:'n0'},p2:{node:'n0'},regular:[],boss:[]};
+function shuffle(a){return a.sort(()=>Math.random()-0.5)} function fmt(sec){const m=String(Math.floor(sec/60)).padStart(2,'0'); const s=String(sec%60).padStart(2,'0'); return m+':'+s;}
+async function loadQuestions(){const r=await fetch('questions.json?ts='+Date.now()); const d=await r.json(); S.regular=shuffle(d.regular.slice()); S.boss=shuffle(d.boss.slice());}
+async function loadRandomMap(){const pick=THEMES[Math.floor(Math.random()*THEMES.length)]; const r=await fetch('maps/'+pick+'.json?ts='+Date.now()); const map=await r.json(); S.map=map; S.nodes=map.nodes; S.edges=map.edges; document.body.className=pick; $('#themeBadge').textContent='theme: '+pick; AudioBank.setBgm(pick);}
+function layoutMap(){const p=$('#platforms'),l=$('#ladders'),n=$('#nodes'); p.innerHTML=l.innerHTML=n.innerHTML=''; S.edges.forEach(e=>{const a=S.nodes[e.from],b=S.nodes[e.to]; if(e.kind==='LADDER'){const d=document.createElement('div'); d.className='ladder'; const left=Math.min(a.x,b.x)+(Math.abs(a.x-b.x)/2)-5; d.style.left=left+'px'; d.style.bottom=Math.min(a.y,b.y)+'px'; d.style.height=Math.abs(a.y-b.y)+'px'; l.appendChild(d);} else {const d=document.createElement('div'); d.className='platform'; const left=Math.min(a.x,b.x); const width=Math.max(40,Math.abs(a.x-b.x)); d.style.left=left+'px'; d.style.bottom=a.y+'px'; d.style.width=width+'px'; p.appendChild(d);} }); Object.entries(S.nodes).forEach(([id,nn])=>{const w=document.createElement('div'); w.className='node'; w.style.left=nn.x+'px'; w.style.bottom=nn.y+'px'; const pin=document.createElement('div'); pin.className='pin'; if(nn.type==='BOSS') pin.classList.add('boss'); if(nn.type==='GOAL') pin.classList.add('goal'); w.appendChild(pin); n.appendChild(w);}); placePlayer('p1',S.p1.node); placePlayer('p2',S.p2.node); cameraFollow();}
+function placePlayer(id,nodeId){const n=S.nodes[nodeId]; const el=$('#'+id); el.style.left=n.x+'px'; el.style.bottom=(n.y+40)+'px';}
+function cameraFollow(){const pid=S.cur===1?'p1':'p2'; const el=$('#'+pid); const mapInner=$('#mapInner'); const wrap=document.querySelector('.map-wrap'); const bx=Math.max(0, Math.min(el.offsetLeft-wrap.clientWidth*0.45, mapInner.scrollWidth-wrap.clientWidth)); mapInner.style.transform='translate('+(-bx)+'px,0)';}
+function outgoing(id){return S.edges.filter(e=>e.from===id).map(e=>({to:e.to,kind:e.kind}))} function incoming(id){return S.edges.filter(e=>e.to===id).map(e=>({from:e.from,kind:e.kind}))}
+function drawQuestion(isBoss){const q=(isBoss?S.boss:S.regular).pop(); if(!q){$('#qStem').textContent='문제가 소진되었어요'; $('#a1').disabled=$('#a2').disabled=true; return null;} $('#qStem').innerHTML='원문: <strong>'+q.q+'</strong>'+ (isBoss? ' <span class="badge" style="background:#fee2e2;color:#991b1b">BOSS</span>':''); const opts=shuffle([{text:q.correct,ok:true},{text:q.wrong,ok:false}]); ['#a1','#a2'].forEach((sel,i)=>{const b=$(sel); b.textContent=opts[i].text; b.dataset.ok=opts[i].ok?'1':'0'; b.disabled=false;}); return q;}
+function showJudge(ok,boss=false){const j=$('#judge'); j.textContent=boss?(ok?'👹 보스 클리어!':'👹 보스 실패…'):(ok?'✅ 정답입니다!':'❌ 땡! 오답입니다'); j.className='judge '+(ok?'ok':'ng'); j.style.display='block'; setTimeout(()=>{j.style.display='none';},900); AudioBank.play(ok?'correct':'wrong');}
+function showDiceOverlay(n,mode){return new Promise(res=>{const overlay=$('#diceOverlay'), cube=$('#diceCube'), caption=$('#diceCaption'); overlay.style.display='flex'; caption.textContent = mode==='forward'? ('+'+n+'칸!') : (n===0?'제자리':('-'+n+'칸')); AudioBank.play('dice_roll'); cube.style.transition='transform .6s cubic-bezier(.2,.7,.2,1)'; cube.style.transform='rotateX(720deg) rotateY(540deg)'; setTimeout(()=>{const ori={1:'rotateX(0deg) rotateY(0deg)',2:'rotateX(-90deg) rotateY(0deg)',3:'rotateX(0deg) rotateY(90deg)',4:'rotateX(0deg) rotateY(-90deg)',5:'rotateX(90deg) rotateY(0deg)',6:'rotateX(180deg) rotateY(0deg)',0:'rotateX(0deg) rotateY(0deg)'}[n]; cube.style.transition='transform .35s ease-out'; cube.style.transform=ori; setTimeout(()=>{AudioBank.play('dice_hit'); setTimeout(()=>{overlay.style.display='none'; res();},500);},380);},600);});}
+function onAnswer(ok){$('#a1').disabled=$('#a2').disabled=true; showJudge(ok); const n = ok?(1+Math.floor(Math.random()*6)):(Math.floor(Math.random()*3)); showDiceOverlay(n, ok?'forward':'penalty').then(()=>{ animateMove(n, ok? +1 : -1).then(()=>{ afterLanding(); }); });}
+function animateMove(steps, dir){return new Promise(res=>{const player=S.cur===1?S.p1:S.p2; const pid=S.cur===1?'p1':'p2'; let count=steps; const tick=()=>{if(count===0){res();return;} let next; if(dir>0){const outs=outgoing(player.node); next=outs[0]; if(!next){res();return;} player.node=next.to;} else {const ins=incoming(player.node); next=ins[0]; if(!next){res();return;} player.node=next.from;} const n=S.nodes[player.node]; const el=$('#'+pid); el.style.transition='left .18s linear, bottom .18s linear'; el.style.left=n.x+'px'; el.style.bottom=(n.y+40)+'px'; cameraFollow(); setTimeout(()=>{count--; tick();},190);}; tick();});}
+function afterLanding(){const player=S.cur===1?S.p1:S.p2; const tile=S.nodes[player.node]; if(tile.type==='BOSS'){AudioBank.play('boss'); const q=drawQuestion(true); if(q){const handler=(e)=>{const ok=e.currentTarget.dataset.ok==='1'; $('#a1').removeEventListener('click', handler); $('#a2').removeEventListener('click', handler); showJudge(ok,true); setTimeout(()=>{animateMove(ok?2:1, ok?+1:-1).then(()=>{endTurn();});},950);}; $('#a1').addEventListener('click', handler, {once:true}); $('#a2').addEventListener('click', handler, {once:true}); return;}} if(tile.type==='GOAL'){ $('#qStem').innerHTML='<strong>P'+S.cur+' 골인! 🎉</strong>'; S.playing=false; return;} endTurn();}
+function endTurn(){S.cur=S.cur===1?2:1; updateHUD(); presentQuiz();}
+function presentQuiz(){const isBoss = S.nodes[(S.cur===1?S.p1:S.p2).node].type==='BOSS'; drawQuestion(isBoss); cameraFollow();}
+let timerId=null; function updateHUD(){ $('#turnLabel').textContent=S.cur===1?'P1':'P2'; $('#timeLeft').textContent=fmt(S.timeLeft); } function startTimer(){ if(timerId) clearInterval(timerId); timerId=setInterval(()=>{ if(!S.playing) return; S.timeLeft--; if(S.timeLeft<=0){ S.playing=false; $('#qStem').innerHTML='<strong>시간 종료!</strong>'; $('#a1').disabled=$('#a2').disabled=true; } updateHUD(); },1000);}
+$('#a1').addEventListener('click', e=> onAnswer(e.currentTarget.dataset.ok==='1')); $('#a2').addEventListener('click', e=> onAnswer(e.currentTarget.dataset.ok==='1'));
+$('#fsBtn').addEventListener('click', ()=>{ const el=document.documentElement; if(!document.fullscreenElement) el.requestFullscreen?.(); else document.exitFullscreen?.(); });
+$('#startBtn').addEventListener('click', async ()=>{ AudioBank.unlock(); await loadQuestions(); await loadRandomMap(); layoutMap(); S.playing=true; S.timeLeft=600; S.cur=1; updateHUD(); AudioBank.startBgm(); presentQuiz(); startTimer(); });
+</script>
+</body>
+</html>
