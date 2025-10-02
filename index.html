@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<title>띄어쓰기 점프 레이스 V2</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#121a2b; --text:#eaf2ff;
+    --accent:#66e0a3; --accent2:#ffd166; --danger:#ff6b6b; --boss:#ff3b3b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Pretendard,Apple SD Gothic Neo,Arial,sans-serif}
+  .app{display:grid;grid-template-rows:auto 1fr auto;min-height:100%}
+  header,footer{padding:8px 12px;background:rgba(255,255,255,.04);backdrop-filter: blur(6px);position:sticky;z-index:5}
+  header{top:0;display:flex;gap:8px;align-items:center;justify-content:space-between}
+  .brand{font-weight:800}
+  button{cursor:pointer;border:none;border-radius:12px;padding:10px 14px;font-weight:700;background:#1f2a44;color:var(--text)}
+  button.primary{background:var(--accent);color:#0b1a11}
+  button.ghost{background:transparent;border:1px solid rgba(255,255,255,.2)}
+  button.warn{background:var(--danger);color:#fff}
+  .hud{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .badge{padding:6px 10px;border-radius:999px;background:#1e263b;font-size:12px}
+  .map-wrap{height:56vh;min-height:300px;border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06);background:linear-gradient(180deg,#0c1322,#0a101a)}
+  .map-inner{height:100%;width:3200px;position:relative;transition:transform .45s cubic-bezier(.22,.61,.36,1)}
+  .ground{position:absolute;left:0;bottom:0;width:100%;height:40%;background:linear-gradient(180deg,#1b2440,#141c33)}
+  .platform{position:absolute;bottom:40%;height:10px;background:linear-gradient(180deg,#66e0a3,rgba(0,0,0,0));box-shadow:0 6px 12px rgba(0,0,0,.35)}
+  .ladder{position:absolute;width:10px;background:#d1d5db;bottom:40%}
+  .node{position:absolute;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .node.pickup{border-color:var(--accent2)}
+  .node.boss{border-color:var(--boss);box-shadow:0 0 12px rgba(255,59,59,.6)}
+  .node.slip{border-color:#79a8ff}
+  .node.climb{border-color:#7bd389}
+  .player{position:absolute;bottom:calc(40% + 12px);transform:translateX(-50%);width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:900;box-shadow:0 6px 16px rgba(0,0,0,.35)}
+  .p1{background:#ffd166;color:#5b4100}
+  .p2{background:#a0c4ff;color:#0c2b5e}
+  .quiz{padding:12px;display:grid;gap:10px;background:rgba(255,255,255,.04);border-top:1px solid rgba(255,255,255,.06)}
+  .q-stem{font-size:18px}
+  .answers{display:grid;gap:8px}
+  .answers button{font-size:18px;padding:12px;border-radius:14px;background:#0f1730;border:1px solid rgba(255,255,255,.15);text-align:left}
+  .inventory{display:flex;gap:8px;align-items:center}
+  .slot{min-width:80px;min-height:36px;border:1px dashed rgba(255,255,255,.3);border-radius:10px;padding:6px 8px;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .slot.filled{border-style:solid;background:rgba(255,255,255,.06)}
+  .shield-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#8be9fd;margin-left:6px}
+  .boss-frame{position:absolute;inset:0;border:6px solid transparent;pointer-events:none}
+  .boss-active .boss-frame{border-color:rgba(255,59,59,.6);animation:pulse 1s infinite}
+  @keyframes pulse { 0%{opacity:.7} 50%{opacity:.25} 100%{opacity:.7}}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#111827;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.35);z-index:10;display:none}
+  .modal{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.5);z-index:20}
+  .modal.open{display:grid}
+  .dialog{background:#0f1629;border:1px solid rgba(255,255,255,.1);padding:16px;border-radius:14px;min-width:280px}
+  .picker{display:flex;gap:8px;margin:8px 0}
+  .picker button{font-size:20px}
+  @media (max-width:640px){ .map-wrap{height:50vh} .answers button{font-size:16px} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">🏁 띄어쓰기 점프 레이스 V2</div>
+    <div class="hud">
+      <span class="badge">⏱ <span id="timeLeft">10:00</span></span>
+      <span class="badge">턴: <span id="turnLabel">P1</span></span>
+      <span class="badge" id="bossBadge" style="display:none">BOSS</span>
+      <span class="badge" id="themeBadge">theme: forest</span>
+    </div>
+    <div class="hud">
+      <button id="startBtn" class="primary">시작</button>
+      <button id="fsBtn" class="ghost">전체화면</button>
+    </div>
+  </header>
+
+  <div class="boss-frame" id="bossFrame">
+    <div class="map-wrap" id="mapWrap">
+      <div class="map-inner" id="mapInner">
+        <div class="ground"></div>
+        <div class="player p1" id="p1" style="left:40px">🙂</div>
+        <div class="player p2" id="p2" style="left:40px">😎</div>
+      </div>
+    </div>
+  </div>
+
+  <section class="quiz" aria-live="polite">
+    <div class="inventory">
+      <div>🎒 슬롯:</div>
+      <div class="slot" id="itemSlot">비어있음</div>
+      <button id="useItemBtn" class="ghost" disabled>아이템 사용</button>
+      <div id="shieldDot" class="shield-dot" title="실드" style="display:none"></div>
+      <div style="margin-left:auto" class="hud">
+        <span class="badge" id="p1Pos">P1: 0</span>
+        <span class="badge" id="p2Pos">P2: 0</span>
+      </div>
+    </div>
+    <div class="q-stem">시작 → 캐릭터 선택 → 테마 랜덤 → 문제!</div>
+    <div class="answers">
+      <button id="a1" disabled>—</button>
+      <button id="a2" disabled>—</button>
+    </div>
+  </section>
+
+  <footer><small>가로모드 권장, iOS는 홈화면 추가로 유사 풀스크린</small></footer>
+</div>
+
+<div class="toast" id="toast">세로 모드예요. 가로로 돌리면 더 편해요!</div>
+
+<!-- Character & Theme modal -->
+<div class="modal" id="pickModal" role="dialog" aria-label="캐릭터 선택">
+  <div class="dialog">
+    <h3>캐릭터 선택</h3>
+    <div>플레이어1</div>
+    <div class="picker" id="p1Pick">
+      <button>🙂</button><button>🦑</button><button>🍤</button><button>🍠</button>
+    </div>
+    <div>플레이어2</div>
+    <div class="picker" id="p2Pick">
+      <button>😎</button><button>🐙</button><button>🐤</button><button>🦊</button>
+    </div>
+    <button id="confirmPick" class="primary" style="width:100%;margin-top:8px">확인</button>
+  </div>
+</div>
+
+<script>
+const $ = (s)=>document.querySelector(s);
+const $$ = (s)=>Array.from(document.querySelectorAll(s));
+
+// ---------- Audio with Theme BGM ----------
+const AudioKit = (()=>{
+  const ctx = new (window.AudioContext||window.webkitAudioContext)();
+  let unlocked=false, bgmTimer=null, theme='forest';
+
+  function unlock(){ if(!unlocked){ const o=ctx.createOscillator(), g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); g.gain.value=0; o.start(); o.stop(ctx.currentTime+0.01); unlocked=true; } }
+
+  function beep(freq=880, dur=0.12, type='sine', vol=0.1){
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type=type; o.frequency.value=freq; g.gain.value=vol;
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+dur); o.stop(ctx.currentTime+dur);
+  }
+
+  const patterns = {
+    forest(){ // 말렛/어쿠스틱 느낌
+      [261.6, 329.6, 392.0, 523.3].forEach((f,i)=>setTimeout(()=>beep(f,0.09,'triangle',0.04), i*230));
+    },
+    jungle(){ // 타악기
+      [196,220,247,196,220,262].forEach((f,i)=>setTimeout(()=>beep(f,0.07,'square',0.05), i*160));
+    },
+    space(){ // 신시 패드/플럭
+      [392,659,523,784].forEach((f,i)=>setTimeout(()=>beep(f,0.12,'sine',0.035), i*260));
+    },
+    sports(){ // 브라스/스네어 롤 느낌
+      [440,494,523,587,659].forEach((f,i)=>setTimeout(()=>beep(f,0.06,'sawtooth',0.05), i*140));
+    },
+    candy(){ // 칩튠
+      [523,659,784,988].forEach((f,i)=>setTimeout(()=>beep(f,0.05,'square',0.05), i*120));
+    }
+  };
+
+  function startTheme(name){
+    theme=name;
+    stopBgm();
+    bgmTimer = setInterval(()=>patterns[theme](), 3000);
+  }
+  function stopBgm(){ if(bgmTimer){ clearInterval(bgmTimer); bgmTimer=null; } }
+  return { ctx, unlock, beep, startTheme, stopBgm };
+})();
+
+// ---------- State ----------
+const S = {
+  theme:'forest', minutes:10, timeLeft:600, playing:false,
+  cur:1,
+  p1: { char:'🙂', idx:0, streak:0, item:null, shield:false },
+  p2: { char:'😎', idx:0, streak:0, item:null, shield:false },
+  path: [], regularDeck:[], bossDeck:[],
+  boostUsed:false
+};
+
+const THEMES = {
+  forest:{ platform:'#66e0a3', ground:'#1b2440', bg:'#0b1220', slipRate:.2, climbRate:.25, pickupRate:.18 },
+  jungle:{ platform:'#7bd389', ground:'#123328', bg:'#07140f', slipRate:.1, climbRate:.3, pickupRate:.2 },
+  space:{ platform:'#9aa7ff', ground:'#1a1a3a', bg:'#0a0a1a', slipRate:.2, climbRate:.2, pickupRate:.18 },
+  sports:{ platform:'#ffd166', ground:'#2e2b14', bg:'#0f0e08', slipRate:.18, climbRate:.2, pickupRate:.25 },
+  candy:{ platform:'#ff9ecb', ground:'#3a1828', bg:'#160b12', slipRate:.15, climbRate:.25, pickupRate:.22 }
+};
+
+function applyTheme(name){
+  S.theme=name;
+  const t = THEMES[name];
+  document.documentElement.style.setProperty('--bg', t.bg);
+  $$('.platform').forEach(p=>p.style.background = `linear-gradient(180deg, ${t.platform}, rgba(0,0,0,0))`);
+  $('.ground').style.background = `linear-gradient(180deg, ${t.ground}, #111827)`;
+  $('#themeBadge').textContent = `theme: ${name}`;
+  AudioKit.startTheme(name);
+}
+
+// ---------- Map with SLIP/CLIMB/PICKUP/BOSS ----------
+function genPath(){
+  const nodes=[]; let x=40, y=220; const stepX=110;
+  // layout to "use whole map" with gentle ups
+  for(let i=0;i<32;i++){
+    const n={x,y,type:'NORMAL'};
+    nodes.push(n);
+    x += stepX + (Math.random()*30-10);
+    if(i%6===5){ y = 220 - (Math.random()*80); } // go slightly up/down
+  }
+  // tag special nodes per theme ratios
+  const t = THEMES[S.theme];
+  // place two bosses roughly 1/3, 2/3
+  [10,22].forEach(i=>{ if(nodes[i]) nodes[i].type='BOSS'; });
+  // slips/climbs/pickups
+  for(let i=1;i<nodes.length-2;i++){
+    if(nodes[i].type==='BOSS') continue;
+    const r=Math.random();
+    if(r < t.slipRate){ nodes[i].type='SLIP'; }
+    else if(r < t.slipRate + t.climbRate){ nodes[i].type='CLIMB'; }
+    else if(Math.random() < t.pickupRate){ nodes[i].type='PICKUP'; nodes[i].pickupType = randChoice(['BOOST','PUSH','BACK','SHIELD']); }
+  }
+  S.path=nodes;
+}
+
+function drawMap(){
+  const inner=$('#mapInner');
+  // clear
+  $$('.platform, .ladder, .node').forEach(el=>el.remove());
+  // platforms
+  for(let i=0;i<S.path.length-1;i++){
+    const a=S.path[i], b=S.path[i+1];
+    const pf=document.createElement('div');
+    pf.className='platform';
+    pf.style.left = Math.min(a.x,b.x)+'px';
+    pf.style.width = Math.abs(b.x-a.x)+'px';
+    pf.style.bottom = `calc(40% + ${Math.min(a.y,b.y)-10}px)`;
+    inner.appendChild(pf);
+    const dy = Math.abs(a.y-b.y);
+    if(dy>40){
+      const lad=document.createElement('div');
+      lad.className='ladder';
+      lad.style.left=a.x+'px'; lad.style.height=dy+'px';
+      inner.appendChild(lad);
+    }
+  }
+  // nodes
+  S.path.forEach((n,i)=>{
+    const d=document.createElement('div');
+    d.className='node';
+    d.style.left=n.x+'px';
+    d.style.bottom=`calc(40% + ${n.y}px)`;
+    if(n.type==='PICKUP'){ d.classList.add('pickup'); d.title='픽업'; d.textContent='🎁'; }
+    else if(n.type==='BOSS'){ d.classList.add('boss'); d.title='보스'; d.textContent='B'; }
+    else if(n.type==='SLIP'){ d.classList.add('slip'); d.title='미끄럼'; d.textContent='↓'; }
+    else if(n.type==='CLIMB'){ d.classList.add('climb'); d.title='오르막'; d.textContent='↑'; }
+    else { d.textContent=i; }
+    inner.appendChild(d);
+  });
+  applyTheme(S.theme);
+}
+
+// ---------- Deck ----------
+let regularStack=[], bossStack=[];
+async function loadDeck(){
+  try{
+    const res = await fetch('questions.json?ts='+Date.now());
+    const data = await res.json();
+    regularStack = shuffle([...data.regular]);
+    bossStack = shuffle([...data.boss]);
+  }catch(e){
+    regularStack=[{q:"나는밥을먹어요",correct:"나는 밥을 먹어요",wrong:"나는밥을 먹어요"}];
+    bossStack=[{q:"학교앞에버스가와요",correct:"학교 앞에 버스가 와요",wrong:"학교앞 에 버스 가 와요"}];
+  }
+}
+
+function drawQuestion(isBoss=false){
+  const q = (isBoss? bossStack: regularStack).pop();
+  if(!q){ $('.q-stem').textContent="모든 문제 완료 🎉"; $('#a1').disabled=$('#a2').disabled=true; return null; }
+  $('.q-stem').innerHTML = `원문: <strong>${q.q}</strong> ${isBoss?'<span class="badge" style="background:rgba(255,59,59,.18);color:#ffaeae">BOSS</span>':''}`;
+  const opts = shuffle([{text:q.correct,ok:true},{text:q.wrong,ok:false}]);
+  [$('#a1'),$('#a2')].forEach((b,i)=>{ b.textContent=opts[i].text; b.dataset.ok = opts[i].ok?'1':'0'; b.disabled=false; });
+  // boss lock item use
+  $('#useItemBtn').disabled = isBoss || !currentPlayer().item;
+  return q;
+}
+
+// ---------- Utils ----------
+function randChoice(a){ return a[Math.floor(Math.random()*a.length)] }
+function shuffle(arr){ return arr.sort(()=>Math.random()-0.5) }
+function fmtTime(sec){ const m=String(Math.floor(sec/60)).padStart(2,'0'); const s=String(sec%60).padStart(2,'0'); return `${m}:${s}` }
+function currentPlayer(){ return S.cur===1? S.p1 : S.p2 }
+function otherPlayer(){ return S.cur===1? S.p2 : S.p1 }
+
+// ---------- Camera & HUD ----------
+function cameraFollow(){
+  const p=currentPlayer();
+  const node=S.path[Math.min(p.idx,S.path.length-1)];
+  const wrapW=$('#mapWrap').clientWidth;
+  const centered = Math.max(0, Math.min(node.x - wrapW*0.4, $('#mapInner').scrollWidth - wrapW));
+  $('#mapInner').style.transform = `translateX(${-centered}px)`;
+}
+
+function updateHUD(){
+  $('#turnLabel').textContent = S.cur===1? 'P1':'P2';
+  $('#timeLeft').textContent = fmtTime(S.timeLeft);
+  $('#bossBadge').style.display = (S.path[currentPlayer().idx]?.type==='BOSS')? '' : 'none';
+  $('#p1Pos').textContent = `P1: ${S.p1.idx}`;
+  $('#p2Pos').textContent = `P2: ${S.p2.idx}`;
+  const it=currentPlayer().item, slot=$('#itemSlot');
+  if(it){ $('#useItemBtn').disabled=false; slot.textContent=it; slot.classList.add('filled'); }
+  else { $('#useItemBtn').disabled=true; slot.textContent='비어있음'; slot.classList.remove('filled'); }
+  $('#shieldDot').style.display = currentPlayer().shield? '' : 'none';
+}
+
+// ---------- Movement & Tiles ----------
+function placePlayers(){
+  ['p1','p2'].forEach((id,i)=>{
+    const p = i===0? S.p1 : S.p2;
+    const n=S.path[Math.min(p.idx,S.path.length-1)];
+    $('#'+id).style.left = (n?n.x:40)+'px';
+  });
+}
+
+function applyMove(delta){
+  const p=currentPlayer();
+  p.idx = Math.max(0, Math.min(p.idx+delta, S.path.length-1));
+  placePlayers();
+}
+
+function resolveTile(){
+  const p=currentPlayer();
+  const n=S.path[p.idx];
+  if(!n) return;
+  if(n.type==='PICKUP' && !p.item){
+    p.item = n.pickupType || randChoice(['BOOST','PUSH','BACK','SHIELD']);
+    AudioKit.beep(1200,0.1,'square',0.06);
+  }else if(n.type==='SLIP'){
+    p.idx = Math.max(0, p.idx-1);
+  }else if(n.type==='CLIMB'){
+    p.idx = Math.min(S.path.length-1, p.idx+1);
+  }
+  placePlayers();
+}
+
+// ---------- Turn ----------
+function presentQuestionForTurn(){
+  const isBoss = S.path[currentPlayer().idx]?.type==='BOSS';
+  document.body.classList.toggle('boss-active', isBoss);
+  drawQuestion(isBoss);
+  cameraFollow(); updateHUD();
+}
+
+function onAnswer(ok){
+  const isBoss = S.path[currentPlayer().idx]?.type==='BOSS';
+  const p=currentPlayer();
+  if(ok){
+    AudioKit.beep(880,0.08,'sine',0.08);
+    p.streak=(p.streak||0)+1;
+    let move=1;
+    if(isBoss) move=2;
+    if(p.streak>=5 && !S.boostUsed){ S.boostUsed=true; move+=1; AudioKit.beep(1320,0.1,'triangle',0.08); }
+    applyMove(move);
+    // reward chance
+    if(Math.random()<0.35 && !p.item){ p.item = randChoice(['BOOST','PUSH','BACK','SHIELD']); }
+  }else{
+    AudioKit.beep(220,0.1,'sawtooth',0.08);
+    if(isBoss){
+      if(p.shield){ p.shield=false; } else { applyMove(-1); }
+    }
+    p.streak=0;
+  }
+  resolveTile();
+  if(p.idx>=S.path.length-1){
+    $('.q-stem').innerHTML = `<strong>P${S.cur} 골인! 🎉</strong>`;
+    $('#a1').disabled=$('#a2').disabled=true; S.playing=false; return;
+  }
+  S.cur = S.cur===1?2:1;
+  presentQuestionForTurn();
+}
+
+// ---------- Items ----------
+function useItem(){
+  const isBoss = S.path[currentPlayer().idx]?.type==='BOSS';
+  if(isBoss) return; // lock during boss
+  const p=currentPlayer();
+  const it=p.item; if(!it) return;
+  if(it==='BOOST'){ applyMove(2); }
+  else if(it==='BACK'){ applyMove(-1); }
+  else if(it==='PUSH'){ const op=otherPlayer(); op.idx=Math.max(0,op.idx-1); placePlayers(); }
+  else if(it==='SHIELD'){ p.shield=true; }
+  p.item=null; updateHUD(); AudioKit.beep(700,0.08,'square',0.07);
+}
+
+// ---------- Timer ----------
+let timerId=null;
+function startTimer(){
+  if(timerId) clearInterval(timerId);
+  timerId=setInterval(()=>{
+    if(!S.playing) return;
+    S.timeLeft--; if(S.timeLeft<=0){ S.playing=false; $('.q-stem').innerHTML='<strong>시간 종료!</strong>'; $('#a1').disabled=$('#a2').disabled=true; }
+    updateHUD();
+  },1000);
+}
+
+// ---------- Orientation ----------
+function checkOrientation(){
+  const isPortrait = window.matchMedia("(orientation: portrait)").matches;
+  $('#toast').style.display = isPortrait? 'block':'none';
+}
+window.addEventListener('resize', checkOrientation);
+
+// ---------- Character Pick ----------
+let p1Pick='🙂', p2Pick='😎';
+$('#p1Pick').addEventListener('click', e=>{ if(e.target.tagName==='BUTTON') p1Pick=e.target.textContent; });
+$('#p2Pick').addEventListener('click', e=>{ if(e.target.tagName==='BUTTON') p2Pick=e.target.textContent; });
+$('#confirmPick').addEventListener('click', ()=>{
+  $('#p1').textContent=p1Pick; $('#p2').textContent=p2Pick;
+  $('#pickModal').classList.remove('open');
+  // after pick, start game
+  bootGame();
+});
+
+// ---------- Boot ----------
+async function bootGame(){
+  // random theme each game
+  const themeNames=Object.keys(THEMES);
+  const randTheme = themeNames[Math.floor(Math.random()*themeNames.length)];
+  applyTheme(randTheme);
+  await loadDeck();
+  // reset state
+  S.minutes=10; S.timeLeft=600; S.playing=true; S.cur=1;
+  S.p1.idx=0; S.p2.idx=0; S.p1.item=null; S.p2.item=null; S.p1.shield=false; S.p2.shield=false;
+  S.boostUsed=false;
+  genPath(); drawMap(); placePlayers();
+  presentQuestionForTurn();
+  startTimer();
+}
+
+// ---------- Events ----------
+$('#startBtn').addEventListener('click', ()=>{
+  AudioKit.unlock();
+  $('#pickModal').classList.add('open');
+});
+
+$('#fsBtn').addEventListener('click', ()=>{
+  const el=document.documentElement;
+  if(!document.fullscreenElement) el.requestFullscreen?.(); else document.exitFullscreen?.();
+});
+
+$('#a1').addEventListener('click', e=> onAnswer(e.currentTarget.dataset.ok==='1'));
+$('#a2').addEventListener('click', e=> onAnswer(e.currentTarget.dataset.ok==='1'));
+$('#useItemBtn').addEventListener('click', useItem);
+
+checkOrientation();
+</script>
+</body>
+</html>
